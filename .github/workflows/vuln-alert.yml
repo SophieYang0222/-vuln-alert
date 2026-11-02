@@ -3,7 +3,12 @@ name: vuln-alert
 on:
   schedule:
     - cron: "7,37 * * * *"   # every 30 minutes (UTC); GitHub may delay scheduled runs a few minutes
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      test_line:
+        description: "Send a LINE test message (checks your LINE setup)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write            # commit state/seen.json and docs/data.json back to the repo
@@ -34,6 +39,17 @@ jobs:
           pip install -r requirements.txt
           python -m playwright install --with-deps chromium
 
+      - name: Send LINE test message
+        if: ${{ inputs.test_line }}
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_TO: ${{ secrets.LINE_TO }}
+        run: |
+          if [ -z "$LINE_CHANNEL_ACCESS_TOKEN" ] || [ -z "$LINE_TO" ]; then
+            echo "::error::LINE_CHANNEL_ACCESS_TOKEN or LINE_TO secret is missing"; exit 1
+          fi
+          python vuln_alert.py --test-line
+
       - name: Check sources, update dashboard data, send LINE alerts
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}   # leave unset to disable LINE
@@ -51,7 +67,7 @@ jobs:
           git config user.name  "vuln-alert-bot"
           git config user.email "vuln-alert-bot@users.noreply.github.com"
           git add state/seen.json docs/data.json 2>/dev/null || true
-          git diff --cached --quiet || (git commit -m "update alert state [skip ci]" && git push)
+          git diff --cached --quiet || (git commit -m "update alert state [skip ci]" && (git push || (git pull --rebase && git push)))
 
       - name: Prepare dashboard
         if: always()
