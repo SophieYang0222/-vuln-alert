@@ -1,0 +1,9 @@
+# 關注清單 Watchlist
+#
+# ⚠ If this repository is PUBLIC, do not put your company's real products here — anyone can read this file.
+#   Instead, add a repository secret named WATCHLIST (Settings → Secrets and variables → Actions) containing
+#   comma-separated keywords, e.g.:  Fortinet, FortiOS, Ivanti, Windows, Synology
+#   The secret is used for LINE 🟠 alerts and is never published.
+#
+# If the repository is private, you can list keywords here instead, one per line (case-insensitive).
+# Lines starting with # are ignored. Keywords here and in the secret are combined.
