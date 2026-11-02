@@ -1,4 +1,4 @@
-name: vuln-alert
+.github/workflows/name: vuln-alert
 
 on:
   schedule:
