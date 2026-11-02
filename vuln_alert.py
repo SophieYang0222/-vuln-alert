@@ -251,14 +251,18 @@ def render_page(url: str, discover: bool = False) -> tuple[list[dict], list[tupl
                     pass
 
         page.on("response", on_response)
-        page.goto(url, wait_until="networkidle", timeout=90_000)
-        try:  # wait until the "Loading..." shell has been replaced by real content
+        # Don't wait for "networkidle": the NICS site keeps background requests open, so it never goes idle.
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=60_000)
+        except Exception as e:  # slow page: still try to read whatever has rendered
+            log.warning("page load slow (%s), continuing", str(e).splitlines()[0][:120])
+        try:  # wait until the "Loading..." shell has been replaced by real announcement links
             page.wait_for_function(
-                "() => [...document.querySelectorAll('a')].some(a => /CVE-|漏洞/.test(a.innerText))",
-                timeout=20_000)
+                "() => [...document.querySelectorAll('a')].filter(a => /CVE-|漏洞|KEV|Vulnerab|安全性公告/i.test(a.innerText)).length >= 3",
+                timeout=40_000)
         except Exception:
-            pass
-        page.wait_for_timeout(1500)
+            log.warning("announcement links did not appear within 40s on %s", url)
+        page.wait_for_timeout(2000)
         anchors = page.eval_on_selector_all(
             "a",
             """els => els.map(a => {
