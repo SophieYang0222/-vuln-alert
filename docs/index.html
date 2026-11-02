@@ -1,1 +1,465 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>資安漏洞儀表板</title>
+<meta name="description" content="已遭利用漏洞與台灣官方漏洞警訊：NICS、TWCERT/CC TVN、CISA KEV">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3 5 7v8c0 7 4.6 12 11 14 6.4-2 11-7 11-14V7z' fill='%232a78d6'/%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f4f3f0;
+  --surface-1: #fcfcfb;
+  --surface-2: #f0efec;
+  --border: #e2e1dc;
+  --grid: #e7e6e1;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #6f6e69;
+  --link: #1c5cab;
+  --series-1: #2a78d6;  /* NICS */
+  --series-2: #eb6834;  /* CISA KEV */
+  --series-3: #1baf7a;  /* TVN */
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --critical-bg: #fbeceb; --serious-bg: #fdf1ec; --warning-bg: #fef6e3; --good-bg: #e9f6e9;
+  --shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #121211; --surface-1: #1a1a19; --surface-2: #232321; --border: #33332f; --grid: #2c2c29;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9a998f; --link: #86b6ef;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
+    --critical-bg: #3a1f1e; --serious-bg: #3a261d; --warning-bg: #3a2f17; --good-bg: #1c301c;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #121211; --surface-1: #1a1a19; --surface-2: #232321; --border: #33332f; --grid: #2c2c29;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9a998f; --link: #86b6ef;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
+  --critical-bg: #3a1f1e; --serious-bg: #3a261d; --warning-bg: #3a2f17; --good-bg: #1c301c;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page); color: var(--text-primary);
+  font: 14px/1.55 system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 48px; }
+header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+h1 { font-size: 22px; line-height: 1.3; margin: 0; letter-spacing: .01em; }
+.sub { color: var(--text-secondary); margin: 2px 0 0; }
+.meta { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 13px; }
+button, select, input { font: inherit; color: inherit; }
+.btn { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+.btn:hover { background: var(--surface-2); }
+.sources { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface-1); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-secondary); }
+.chip .ic { font-weight: 700; }
+.chip.ok .ic { color: var(--good); }
+.chip.bad { background: var(--critical-bg); border-color: transparent; color: var(--text-primary); }
+.chip.bad .ic { color: var(--critical); }
+.grid { display: grid; gap: 16px; }
+.kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
+.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin: 16px 0; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); min-width: 0; }
+.card h2 { font-size: 15px; margin: 0 0 2px; }
+.card .hint { color: var(--text-muted); font-size: 12.5px; margin: 0 0 12px; }
+.kpi .label { color: var(--text-secondary); font-size: 13px; }
+.kpi .num { font-size: 34px; line-height: 1.15; font-weight: 650; font-variant-numeric: tabular-nums; margin: 4px 0 2px; }
+.kpi .foot { color: var(--text-muted); font-size: 12.5px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 6px; color: var(--text-secondary); font-size: 12.5px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.axis text, .lbl { fill: var(--text-muted); font-size: 11px; }
+.dlbl { fill: var(--text-secondary); font-size: 11.5px; }
+.vlbl { fill: var(--text-primary); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,.12); white-space: nowrap; z-index: 5; display: none; }
+.tip .t { color: var(--text-muted); margin-bottom: 4px; }
+.tip .r { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.tip .r b { font-variant-numeric: tabular-nums; }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { padding: 10px 0; border-top: 1px solid var(--grid); }
+.list li:first-child { border-top: 0; padding-top: 0; }
+.list .d { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.list .why { color: var(--text-secondary); font-size: 12.5px; }
+.empty { color: var(--text-muted); padding: 12px 0; }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 6px; font-size: 12px; white-space: nowrap; color: var(--text-primary); }
+.badge .i { font-weight: 700; }
+.b-exp { background: var(--critical-bg); } .b-exp .i { color: var(--critical); }
+.b-ran { background: var(--serious-bg); } .b-ran .i { color: var(--serious); }
+.b-watch { background: var(--warning-bg); } .b-watch .i { color: var(--warning); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 4px 0 12px; }
+.filters select, .filters input[type=search] { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+.filters input[type=search] { flex: 1 1 200px; min-width: 0; }
+.filters label.ck { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); cursor: pointer; }
+.count { color: var(--text-muted); font-size: 12.5px; margin-left: auto; }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--grid); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; min-width: 760px; }
+th, td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--grid); vertical-align: top; }
+thead th { border-top: 0; background: var(--surface-2); color: var(--text-secondary); font-weight: 600; font-size: 12.5px; position: sticky; top: 0; }
+td.date { white-space: nowrap; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+td.src { white-space: nowrap; color: var(--text-secondary); font-size: 12.5px; }
+td.cve { white-space: nowrap; font-size: 12px; color: var(--text-secondary); font-family: ui-monospace, Consolas, monospace; }
+td .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.more { display: block; margin: 12px auto 0; }
+footer { color: var(--text-muted); font-size: 12.5px; margin-top: 24px; }
+details.wl { margin-bottom: 16px; padding: 12px 16px; }
+details.wl summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+details.wl summary .s { font-weight: 400; color: var(--text-muted); font-size: 12.5px; margin-left: 6px; }
+.wl-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.wl-row input { flex: 1 1 260px; min-width: 0; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+.wl-note { color: var(--text-muted); font-size: 12.5px; margin: 8px 0 0; }
+.loading { padding: 40px; text-align: center; color: var(--text-muted); }
+@media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .two { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 420px) { .kpi .num { font-size: 28px; } h1 { font-size: 19px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>資安漏洞儀表板</h1>
+      <p class="sub">已遭利用漏洞與台灣官方漏洞警訊</p>
+    </div>
+    <div class="meta"><span id="updated">載入中…</span><button class="btn" id="theme" type="button">深色／淺色</button></div>
+  </header>
+  <div class="sources" id="sources"></div>
+  <details class="card wl" id="wlBox">
+    <summary>我的關注清單<span class="s" id="wlSum"></span></summary>
+    <div class="wl-row">
+      <input type="text" id="wlInput" placeholder="以逗號分隔，例如：Fortinet, Ivanti, Windows" aria-label="關注關鍵字">
+      <button class="btn" id="wlSave" type="button">套用</button>
+    </div>
+    <p class="wl-note">關鍵字只存在你這台裝置的瀏覽器中，不會上傳，也不會出現在公開資料裡。比對範圍：標題、廠商、產品。</p>
+  </details>
+  <div id="app"><div class="loading">載入資料中…</div></div>
+  <footer>
+    資料來源：<a href="https://www.nics.nat.gov.tw/core_business/information_security_information_sharing/Vulnerability_Alert_Announcements/" target="_blank" rel="noopener">NICS 漏洞警訊公告</a>、
+    <a href="https://www.nics.nat.gov.tw/core_business/information_security_information_sharing/Vulnerability_Alerts/" target="_blank" rel="noopener">NICS 漏洞警示新聞</a>、
+    <a href="https://www.twcert.org.tw/tw/lp-132-1.html" target="_blank" rel="noopener">TWCERT/CC TVN</a>、
+    <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener">CISA KEV</a>。
+    「已遭利用」= 列於 CISA KEV，或官方公告指出已遭利用。廠商名稱由標題自動判斷，可能不完全準確。
+  </footer>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const DAY = 864e5;
+const SRC = {
+  nics:      { label: "NICS 漏洞警訊公告", short: "NICS 警訊", color: "--series-1" },
+  nics_news: { label: "NICS 漏洞警示新聞", short: "NICS 新聞", color: null },
+  tvn:       { label: "TWCERT/CC TVN",    short: "TVN",       color: "--series-3" },
+  kev:       { label: "CISA KEV",         short: "CISA KEV",  color: "--series-2" },
+  twcert_news:{ label: "TWCERT/CC 資安新聞", short: "TWCERT 新聞", color: null },
+};
+const srcLabel = k => (SRC[k] || {}).label || k;
+const toDay = d => { const t = Date.parse(String(d).slice(0, 10) + "T00:00:00+08:00"); return isNaN(t) ? null : t; };
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmtMD = t => { const d = new Date(t + 8 * 36e5); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`; };
+
+// ---- theme toggle (per-viewer convenience only)
+const root = document.documentElement;
+try { const t = localStorage.getItem("vuln-theme"); if (t) root.dataset.theme = t; } catch (e) {}
+$("#theme").addEventListener("click", () => {
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("vuln-theme", root.dataset.theme); } catch (e) {}
+  renderCharts();
+});
+
+let DATA = null, STATUS = null, NOW = Date.now();
+
+Promise.all([
+  fetch("data.json", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+  fetch("status.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
+]).then(([data, status]) => {
+  DATA = data; STATUS = status;
+  for (const it of DATA.items) it.t = toDay(it.date);
+  if (STATUS && STATUS.generated) NOW = Date.parse(STATUS.generated) || NOW;
+  setupWatchlist();
+  render();
+}).catch(err => {
+  $("#app").innerHTML = `<div class="card loading">無法載入 data.json（${esc(err.message)}）。<br>請確認 GitHub Actions 已至少執行一次；若直接以檔案開啟本頁，瀏覽器會阻擋讀取資料。</div>`;
+  $("#updated").textContent = "";
+});
+
+// ---- watchlist: published by the server (private dashboards) or kept only in this browser (public ones)
+let WATCH = [], WATCH_MODE = "local";
+function applyWatch() {
+  for (const it of DATA.items) {
+    if (WATCH_MODE === "server") { it.w = it.watch || []; continue; }
+    const hay = `${it.title} ${it.vendor || ""} ${it.product || ""}`.toLowerCase();
+    it.w = WATCH.filter(k => hay.includes(k.toLowerCase()));
+  }
+  $("#wlSum").textContent = WATCH.length ? `· ${WATCH.length} 個關鍵字` : "· 尚未設定（點此設定）";
+}
+function setupWatchlist() {
+  if (Array.isArray(DATA.watchlist)) {
+    WATCH_MODE = "server"; WATCH = DATA.watchlist;
+    $("#wlBox").style.display = "none";
+  } else {
+    try { WATCH = JSON.parse(localStorage.getItem("vuln-watch") || "[]"); } catch (e) { WATCH = []; }
+    if (!Array.isArray(WATCH)) WATCH = [];
+    $("#wlInput").value = WATCH.join(", ");
+    const save = () => {
+      WATCH = [...new Set($("#wlInput").value.split(/[,，、\n]/).map(s => s.trim()).filter(Boolean))];
+      try { localStorage.setItem("vuln-watch", JSON.stringify(WATCH)); } catch (e) {}
+      applyWatch(); render();
+    };
+    $("#wlSave").addEventListener("click", save);
+    $("#wlInput").addEventListener("keydown", e => { if (e.key === "Enter") save(); });
+  }
+  applyWatch();
+}
+
+function render() {
+  // header + source health
+  if (STATUS) {
+    const g = new Date(Date.parse(STATUS.generated));
+    $("#updated").textContent = "更新於 " + g.toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    $("#sources").innerHTML = STATUS.sources.map(s => s.ok
+      ? `<span class="chip ok"><span class="ic" aria-hidden="true">✓</span>${esc(s.label)}<span>· 正常</span></span>`
+      : `<span class="chip bad" title="${esc(s.error)}"><span class="ic" aria-hidden="true">✕</span>${esc(s.label)}<span>· 抓取失敗${s.fail_count > 1 ? `（連續 ${s.fail_count} 次）` : ""}</span></span>`).join("");
+  } else $("#updated").textContent = "";
+
+  const items = DATA.items;
+  const since = days => NOW - days * DAY;
+  const inRange = (it, a, b) => it.t !== null && it.t > a && it.t <= b;
+  const kev = items.filter(i => i.source === "kev");
+  const nics = items.filter(i => i.source === "nics");
+  const kev30 = kev.filter(i => inRange(i, since(30), NOW)).length;
+  const kevPrev = kev.filter(i => inRange(i, since(60), since(30))).length;
+  const ran90 = kev.filter(i => i.ransomware && inRange(i, since(90), NOW)).length;
+  const nics30 = nics.filter(i => inRange(i, since(30), NOW));
+  const watch30 = items.filter(i => i.w.length && inRange(i, since(30), NOW)).length;
+  const watchFoot = !WATCH.length ? "尚未設定 · 請在上方「我的關注清單」輸入"
+    : `${WATCH.length} 個關鍵字 · ${WATCH_MODE === "local" ? "只存於此瀏覽器" : "所有來源"}`;
+  const diff = kev30 - kevPrev;
+
+  $("#app").innerHTML = `
+  <section class="grid kpis">
+    <div class="card kpi"><div class="label">近 30 天新增已遭利用漏洞</div><div class="num">${kev30}</div>
+      <div class="foot">CISA KEV · 前 30 天 ${kevPrev}（${diff === 0 ? "持平" : (diff > 0 ? "多 " + diff : "少 " + (-diff))}）</div></div>
+    <div class="card kpi"><div class="label">近 90 天勒索軟體利用</div><div class="num">${ran90}</div>
+      <div class="foot">KEV 中標記為勒索軟體已知利用</div></div>
+    <div class="card kpi"><div class="label">近 30 天 NICS 漏洞警訊</div><div class="num">${nics30.length}</div>
+      <div class="foot">其中 ${nics30.filter(i => i.exploited).length} 則已遭利用</div></div>
+    <div class="card kpi"><div class="label">近 30 天關注清單命中</div><div class="num">${WATCH.length ? watch30 : "—"}</div>
+      <div class="foot">${watchFoot}</div></div>
+  </section>
+
+  <section class="card">
+    <h2>每週新增數量（近 26 週）</h2>
+    <p class="hint">依公告／收錄日期，週一起算；最後一週仍在進行中</p>
+    <div class="legend" id="trendLegend"></div>
+    <div class="chart" id="trend"></div>
+  </section>
+
+  <section class="grid two">
+    <div class="card">
+      <h2>最常被利用的廠商（近 180 天）</h2>
+      <p class="hint">CISA KEV 新增筆數，前 10 名</p>
+      <div class="chart" id="vendors"></div>
+    </div>
+    <div class="card">
+      <h2>台灣已示警且已遭利用</h2>
+      <p class="hint">NICS／TVN 公告中，已列入 CISA KEV 或公告指出已遭利用者</p>
+      <ul class="list" id="twExploited"></ul>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>所有項目</h2>
+    <div class="filters">
+      <select id="fRange" aria-label="時間範圍"><option value="30">近 30 天</option><option value="90" selected>近 90 天</option><option value="365">近 1 年</option><option value="0">全部</option></select>
+      <select id="fSrc" aria-label="來源"><option value="">全部來源</option>${[...new Set(items.map(i => i.source))].map(s => `<option value="${esc(s)}">${esc(srcLabel(s))}</option>`).join("")}</select>
+      <label class="ck"><input type="checkbox" id="fExp"> 只看已遭利用</label>
+      <label class="ck"><input type="checkbox" id="fWatch"> 只看關注清單</label>
+      <input type="search" id="fQ" placeholder="搜尋標題、廠商、CVE…" aria-label="搜尋">
+      <span class="count" id="fCount"></span>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>日期</th><th>來源</th><th>標題</th><th>廠商</th><th>CVE</th><th>標記</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <button class="btn more" id="more" type="button">顯示更多</button>
+  </section>`;
+
+  // Taiwan-flagged exploited
+  const tw = items.filter(i => (i.source === "nics" || i.source === "tvn" || i.source === "nics_news") && i.exploited)
+    .sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 8);
+  $("#twExploited").innerHTML = tw.length ? tw.map(i => `<li>
+      <div class="d">${esc(i.date)} · ${esc(srcLabel(i.source))}</div>
+      <div><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
+      <div class="why"><span class="badge b-exp"><span class="i" aria-hidden="true">⚠</span>已遭利用</span> ${esc(i.why)}</div></li>`).join("")
+    : `<li class="empty">目前沒有符合的公告</li>`;
+
+  // table
+  let limit = 30;
+  const drawRows = () => {
+    const days = +$("#fRange").value, src = $("#fSrc").value, exp = $("#fExp").checked, w = $("#fWatch").checked;
+    const q = $("#fQ").value.trim().toLowerCase();
+    const rows = items.filter(i =>
+      (!days || (i.t !== null && i.t > NOW - days * DAY)) && (!src || i.source === src) && (!exp || i.exploited) &&
+      (!w || i.w.length) &&
+      (!q || `${i.title} ${i.vendor} ${(i.cves || []).join(" ")} ${i.product || ""}`.toLowerCase().includes(q)))
+      .sort((a, b) => (b.t || 0) - (a.t || 0));
+    $("#fCount").textContent = `共 ${rows.length} 筆`;
+    $("#rows").innerHTML = rows.slice(0, limit).map(i => {
+      const tags = [];
+      if (i.exploited) tags.push(`<span class="badge b-exp" title="${esc(i.why)}"><span class="i" aria-hidden="true">⚠</span>已遭利用</span>`);
+      if (i.ransomware) tags.push(`<span class="badge b-ran"><span class="i" aria-hidden="true">◆</span>勒索軟體</span>`);
+      if (i.w.length) tags.push(`<span class="badge b-watch" title="${esc(i.w.join(", "))}"><span class="i" aria-hidden="true">★</span>關注：${esc(i.w.slice(0, 2).join(", "))}</span>`);
+      const cves = (i.cves || []);
+      return `<tr><td class="date">${esc(i.date)}</td><td class="src">${esc(srcLabel(i.source))}</td>
+        <td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a>${i.due ? `<div class="d" style="color:var(--text-muted);font-size:12px">CISA 修補期限 ${esc(i.due)}</div>` : ""}</td>
+        <td>${esc(i.vendor)}</td><td class="cve">${cves.slice(0, 3).map(esc).join("<br>")}${cves.length > 3 ? `<br>+${cves.length - 3}` : ""}</td>
+        <td><div class="tags">${tags.join("")}</div></td></tr>`;
+    }).join("") || `<tr><td colspan="6" class="empty">沒有符合條件的項目</td></tr>`;
+    $("#more").style.display = rows.length > limit ? "" : "none";
+  };
+  ["#fRange", "#fSrc", "#fExp", "#fWatch"].forEach(s => $(s).addEventListener("change", () => { limit = 30; drawRows(); }));
+  $("#fQ").addEventListener("input", () => { limit = 30; drawRows(); });
+  $("#more").addEventListener("click", () => { limit += 100; drawRows(); });
+  drawRows();
+
+  renderCharts();
+}
+
+// ---------------------------------------------------------------- charts
+function renderCharts() { if (!DATA) return; trendChart(); vendorChart(); }
+
+function niceMax(v) {
+  if (v <= 4) return 4;
+  const p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p;
+  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+  return Math.ceil(v / (step * p / 4)) * (step * p / 4) || 4;
+}
+
+function weekStart(t) { // Monday 00:00 Taipei
+  const d = new Date(t + 8 * 36e5), dow = (d.getUTCDay() + 6) % 7;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - 8 * 36e5 - dow * DAY;
+}
+
+function trendChart() {
+  const el = $("#trend"); if (!el) return;
+  const N = 26, w0 = weekStart(NOW) - (N - 1) * 7 * DAY;
+  const weeks = Array.from({ length: N }, (_, i) => w0 + i * 7 * DAY);
+  const present = new Set(DATA.items.map(i => i.source));
+  const series = ["nics", "kev", "tvn"].filter(s => present.has(s)).map(s => {
+    const vals = new Array(N).fill(0);
+    for (const it of DATA.items) if (it.source === s && it.t !== null && it.t >= w0) {
+      const k = Math.floor((it.t - w0) / (7 * DAY)); if (k >= 0 && k < N) vals[k]++;
+    }
+    return { key: s, label: SRC[s].short, color: cssVar(SRC[s].color), vals };
+  });
+  $("#trendLegend").innerHTML = series.map(s => `<span><i class="sw" style="background:${s.color}"></i>${esc(srcLabel(s.key))}</span>`).join("");
+
+  const W = Math.max(280, el.clientWidth), H = W < 520 ? 220 : 260;
+  const m = { l: 32, r: W < 520 ? 12 : 72, t: 10, b: 26 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const ymax = niceMax(Math.max(1, ...series.flatMap(s => s.vals)));
+  const x = i => m.l + (iw * i) / (N - 1), y = v => m.t + ih - (ih * v) / ymax;
+  const surface = cssVar("--surface-1"), grid = cssVar("--grid");
+  let svg = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="每週新增數量折線圖">`;
+  for (let k = 0; k <= 4; k++) {
+    const v = (ymax * k) / 4, yy = y(v);
+    svg += `<line x1="${m.l}" x2="${W - m.r}" y1="${yy}" y2="${yy}" stroke="${grid}" stroke-width="1"/>`;
+    svg += `<text class="lbl" x="${m.l - 6}" y="${yy + 4}" text-anchor="end">${Number.isInteger(v) ? v : v.toFixed(1)}</text>`;
+  }
+  const every = W < 520 ? 6 : 4;
+  weeks.forEach((t, i) => { if ((N - 1 - i) % every === 0 && i < N - 1) svg += `<text class="lbl" x="${x(i)}" y="${H - 6}" text-anchor="middle">${fmtMD(t)}</text>`; });
+  for (const s of series) {
+    const pts = s.vals.map((v, i) => x(i).toFixed(1) + " " + y(v).toFixed(1));
+    svg += `<path d="M${pts.slice(0, N - 1).join("L")}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    // current week is incomplete: dashed so it doesn't read as a real drop
+    svg += `<path d="M${pts[N - 2]}L${pts[N - 1]}" fill="none" stroke="${s.color}" stroke-width="2" stroke-dasharray="3 4" stroke-linecap="round"/>`;
+  }
+  // direct labels at line ends (wide screens), nudged apart upward so they stay above the axis
+  if (m.r > 40) {
+    const ends = series.map(s => ({ s, y: y(s.vals[N - 1]) })).sort((a, b) => b.y - a.y);
+    for (let k = 1; k < ends.length; k++) if (ends[k - 1].y - ends[k].y < 14) ends[k].y = ends[k - 1].y - 14;
+    for (const e of ends) svg += `<text class="dlbl" x="${x(N - 1) + 8}" y="${e.y + 4}">${esc(e.s.label)}</text>`;
+  }
+  svg += `<g id="cross" style="display:none"><line id="cx" y1="${m.t}" y2="${m.t + ih}" stroke="${cssVar("--text-muted")}" stroke-width="1" stroke-dasharray="3 3"/>`;
+  series.forEach((s, k) => svg += `<circle id="cd${k}" r="4" fill="${s.color}" stroke="${surface}" stroke-width="2"/>`);
+  svg += `</g><rect id="hit" x="${m.l - 6}" y="${m.t}" width="${iw + 12}" height="${ih}" fill="transparent"/></svg><div class="tip" id="trendTip"></div>`;
+  el.innerHTML = svg;
+
+  const tip = $("#trendTip", el), cross = $("#cross", el);
+  const show = clientX => {
+    const r = el.getBoundingClientRect(), px = (clientX - r.left) * (W / r.width);
+    const i = Math.max(0, Math.min(N - 1, Math.round(((px - m.l) / iw) * (N - 1))));
+    cross.style.display = ""; $("#cx", el).setAttribute("x1", x(i)); $("#cx", el).setAttribute("x2", x(i));
+    series.forEach((s, k) => { const c = $("#cd" + k, el); c.setAttribute("cx", x(i)); c.setAttribute("cy", y(s.vals[i])); });
+    const end = weeks[i] + 6 * DAY;
+    tip.innerHTML = `<div class="t">${fmtMD(weeks[i])} – ${fmtMD(end)}${i === N - 1 ? "（本週，進行中）" : ""}</div>` +
+      series.map(s => `<div class="r"><span><i class="sw" style="background:${s.color}"></i> ${esc(s.label)}</span><b>${s.vals[i]}</b></div>`).join("");
+    tip.style.display = "block";
+    const left = (x(i) / W) * r.width, tw = tip.offsetWidth;
+    tip.style.left = Math.min(r.width - tw, Math.max(0, left + (left > r.width / 2 ? -tw - 12 : 12))) + "px";
+    tip.style.top = "8px";
+  };
+  const hit = $("#hit", el);
+  hit.addEventListener("pointermove", e => show(e.clientX));
+  hit.addEventListener("pointerdown", e => show(e.clientX));
+  hit.addEventListener("pointerleave", () => { cross.style.display = "none"; tip.style.display = "none"; });
+}
+
+function vendorChart() {
+  const el = $("#vendors"); if (!el) return;
+  const from = NOW - 180 * DAY, counts = new Map();
+  for (const it of DATA.items) if (it.source === "kev" && it.t !== null && it.t > from) {
+    const v = it.vendor || "(未知)", c = counts.get(v) || { n: 0, r: 0 };
+    c.n++; if (it.ransomware) c.r++; counts.set(v, c);
+  }
+  const rows = [...counts.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0])).slice(0, 10);
+  if (!rows.length) { el.innerHTML = `<div class="empty">近 180 天沒有 KEV 資料</div>`; return; }
+  const W = Math.max(260, el.clientWidth), rowH = 26, bh = 14, lw = Math.min(140, W * 0.36), vr = 34;
+  const H = rows.length * rowH + 4, max = rows[0][1].n, iw = W - lw - vr - 8;
+  const color = cssVar("--series-2");
+  let svg = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="KEV 廠商排行長條圖">`;
+  rows.forEach(([name, c], k) => {
+    const yy = k * rowH + (rowH - bh) / 2, w = Math.max(2, (iw * c.n) / max), x0 = lw + 8, r = Math.min(4, w / 2);
+    const short = name.length > 16 ? name.slice(0, 15) + "…" : name;
+    svg += `<text class="lbl" x="${lw}" y="${yy + bh - 3}" text-anchor="end" style="font-size:12px;fill:var(--text-secondary)">${esc(short)}</text>`;
+    svg += `<path d="M${x0} ${yy}h${w - r}a${r} ${r} 0 0 1 ${r} ${r}v${bh - 2 * r}a${r} ${r} 0 0 1 ${-r} ${r}h${-(w - r)}z" fill="${color}"/>`;
+    svg += `<text class="vlbl" x="${x0 + w + 6}" y="${yy + bh - 3}">${c.n}</text>`;
+    svg += `<rect class="vh" data-k="${k}" x="0" y="${k * rowH}" width="${W}" height="${rowH}" fill="transparent"/>`;
+  });
+  svg += `</svg><div class="tip" id="vTip"></div>`;
+  el.innerHTML = svg;
+  const tip = $("#vTip", el);
+  el.querySelectorAll(".vh").forEach(rc => {
+    const on = () => {
+      const [name, c] = rows[+rc.dataset.k];
+      tip.innerHTML = `<div class="t">${esc(name)}</div><div class="r"><span>KEV 新增</span><b>${c.n}</b></div><div class="r"><span>勒索軟體利用</span><b>${c.r}</b></div>`;
+      tip.style.display = "block";
+      const r = el.getBoundingClientRect(), yy = (+rc.getAttribute("y") / H) * r.height;
+      tip.style.left = Math.max(0, r.width - tip.offsetWidth) + "px"; tip.style.top = (yy + rowH) + "px";
+    };
+    rc.addEventListener("pointerenter", on); rc.addEventListener("pointerdown", on);
+    rc.addEventListener("pointerleave", () => tip.style.display = "none");
+  });
+}
+
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(renderCharts, 120); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderCharts);
+})();
+</script>
+</body>
+</html>
 
