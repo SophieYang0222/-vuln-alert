@@ -98,13 +98,19 @@ button, select, input { font: inherit; color: inherit; }
 .b-exp { background: var(--critical-bg); } .b-exp .i { color: var(--critical); }
 .b-ran { background: var(--serious-bg); } .b-ran .i { color: var(--serious); }
 .b-watch { background: var(--warning-bg); } .b-watch .i { color: var(--warning); }
+.b-zw { background: var(--serious-bg); } .b-zw .i { color: var(--serious); }
+.b-ref { background: var(--surface-2); } .b-ref .i { color: var(--text-muted); font-style: italic; }
+a.badge.b-link { background: var(--surface-2); color: var(--link); }
+a.badge.b-link:hover { text-decoration: underline; }
+td.epss { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.epss-pill { display: inline-block; padding: 1px 7px; border-radius: 6px; background: var(--surface-2); color: var(--text-primary); font-size: 12px; font-variant-numeric: tabular-nums; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 4px 0 12px; }
 .filters select, .filters input[type=search] { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
 .filters input[type=search] { flex: 1 1 200px; min-width: 0; }
 .filters label.ck { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); cursor: pointer; }
 .count { color: var(--text-muted); font-size: 12.5px; margin-left: auto; }
 .tbl-wrap { overflow-x: auto; border: 1px solid var(--grid); border-radius: 8px; }
-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+table { width: 100%; border-collapse: collapse; min-width: 820px; }
 th, td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--grid); vertical-align: top; }
 thead th { border-top: 0; background: var(--surface-2); color: var(--text-secondary); font-weight: 600; font-size: 12.5px; position: sticky; top: 0; }
 td.date { white-space: nowrap; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
@@ -147,8 +153,10 @@ details.wl summary .s { font-weight: 400; color: var(--text-muted); font-size: 1
     資料來源：<a href="https://www.nics.nat.gov.tw/core_business/information_security_information_sharing/Vulnerability_Alert_Announcements/" target="_blank" rel="noopener">NICS 漏洞警訊公告</a>、
     <a href="https://www.nics.nat.gov.tw/core_business/information_security_information_sharing/Vulnerability_Alerts/" target="_blank" rel="noopener">NICS 漏洞警示新聞</a>、
     <a href="https://www.twcert.org.tw/tw/lp-132-1.html" target="_blank" rel="noopener">TWCERT/CC TVN</a>、
-    <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener">CISA KEV</a>。
-    「已遭利用」= 列於 CISA KEV，或官方公告指出已遭利用。廠商名稱由標題自動判斷，可能不完全準確。
+    <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener">CISA KEV</a>、
+    <a href="https://radar.cloudflare.com/security/zero-wire" target="_blank" rel="noopener">Cloudflare Radar Zero Wire</a>；
+    EPSS 分數由 <a href="https://www.first.org/epss/" target="_blank" rel="noopener">FIRST.org</a> 提供，每日更新。
+    「已遭利用」= 列於 CISA KEV，或官方公告指出已遭利用。EPSS 為機率估計，不代表已遭利用。廠商名稱由標題自動判斷，可能不完全準確。
   </footer>
 </div>
 
@@ -164,7 +172,14 @@ const SRC = {
   tvn:       { label: "TWCERT/CC TVN",    short: "TVN",       color: "--series-3" },
   kev:       { label: "CISA KEV",         short: "CISA KEV",  color: "--series-2" },
   twcert_news:{ label: "TWCERT/CC 資安新聞", short: "TWCERT 新聞", color: null },
+  zerowire:  { label: "Cloudflare Zero Wire", short: "Zero Wire", color: null },
 };
+// EPSS: probability (0–1) of exploitation in the next 30 days
+const fmtEpss = v => v == null ? "" : v >= 0.1 ? (v * 100).toFixed(0) + "%" : v >= 0.01 ? (v * 100).toFixed(1) + "%" : (v * 100).toFixed(2) + "%";
+const fmtPct = p => p == null ? "" : `高於 ${Math.floor(p * 100)}% 的 CVE`;
+const zwBadge = s => !s ? "" : /needs attention/i.test(s)
+  ? `<span class="badge b-zw"><span class="i" aria-hidden="true">!</span>需要注意</span>`
+  : `<span class="badge b-ref"><span class="i" aria-hidden="true">i</span>參考</span>`;
 const srcLabel = k => (SRC[k] || {}).label || k;
 const toDay = d => { const t = Date.parse(String(d).slice(0, 10) + "T00:00:00+08:00"); return isNaN(t) ? null : t; };
 const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -201,7 +216,7 @@ let WATCH = [], WATCH_MODE = "local";
 function applyWatch() {
   for (const it of DATA.items) {
     if (WATCH_MODE === "server") { it.w = it.watch || []; continue; }
-    const hay = `${it.title} ${it.vendor || ""} ${it.product || ""}`.toLowerCase();
+    const hay = `${it.title} ${it.vendor || ""} ${it.product || ""} ${(it.tags || []).join(" ")}`.toLowerCase();
     it.w = WATCH.filter(k => hay.includes(k.toLowerCase()));
   }
   $("#wlSum").textContent = WATCH.length ? `· ${WATCH.length} 個關鍵字` : "· 尚未設定（點此設定）";
@@ -232,7 +247,10 @@ function render() {
     $("#updated").textContent = "更新於 " + g.toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
     $("#sources").innerHTML = STATUS.sources.map(s => s.ok
       ? `<span class="chip ok"><span class="ic" aria-hidden="true">✓</span>${esc(s.label)}<span>· 正常</span></span>`
-      : `<span class="chip bad" title="${esc(s.error)}"><span class="ic" aria-hidden="true">✕</span>${esc(s.label)}<span>· 抓取失敗${s.fail_count > 1 ? `（連續 ${s.fail_count} 次）` : ""}</span></span>`).join("");
+      : `<span class="chip bad" title="${esc(s.error)}"><span class="ic" aria-hidden="true">✕</span>${esc(s.label)}<span>· 抓取失敗${s.fail_count > 1 ? `（連續 ${s.fail_count} 次）` : ""}</span></span>`).join("")
+      + (STATUS.epss && STATUS.epss.enabled ? (STATUS.epss.ok
+        ? `<span class="chip ok"><span class="ic" aria-hidden="true">✓</span>FIRST EPSS<span>· ${esc(STATUS.epss.date || "")}</span></span>`
+        : `<span class="chip bad" title="${esc(STATUS.epss.error)}"><span class="ic" aria-hidden="true">✕</span>FIRST EPSS<span>· 更新失敗，沿用 ${esc(STATUS.epss.date || "先前")} 分數</span></span>`) : "");
   } else $("#updated").textContent = "";
 
   const items = DATA.items;
@@ -261,24 +279,37 @@ function render() {
       <div class="foot">${watchFoot}</div></div>
   </section>
 
-  <section class="card">
-    <h2>每週新增數量（近 26 週）</h2>
-    <p class="hint">依公告／收錄日期，週一起算；最後一週仍在進行中</p>
-    <div class="legend" id="trendLegend"></div>
-    <div class="chart" id="trend"></div>
-  </section>
-
   <section class="grid two">
-    <div class="card">
-      <h2>最常被利用的廠商（近 180 天）</h2>
-      <p class="hint">CISA KEV 新增筆數，前 10 名</p>
-      <div class="chart" id="vendors"></div>
-    </div>
     <div class="card">
       <h2>台灣已示警且已遭利用</h2>
       <p class="hint">NICS／TVN 公告中，已列入 CISA KEV 或公告指出已遭利用者</p>
       <ul class="list" id="twExploited"></ul>
     </div>
+    <div class="card">
+      <h2>Cloudflare Zero Wire 最新簡報</h2>
+      <p class="hint">Cloudflare 精選的重大漏洞白話簡報：發生什麼事、現在該做什麼</p>
+      <ul class="list" id="zwList"></ul>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="card">
+      <h2>可能即將被利用</h2>
+      <p class="hint">近 180 天台灣公告與 Zero Wire 中，尚未遭利用、EPSS 最高者。EPSS = 未來 30 天被利用的機率（FIRST.org）</p>
+      <ul class="list" id="epssList"></ul>
+    </div>
+    <div class="card">
+      <h2>最常被利用的廠商（近 180 天）</h2>
+      <p class="hint">CISA KEV 新增筆數，前 10 名</p>
+      <div class="chart" id="vendors"></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-bottom:16px">
+    <h2>每週新增數量（近 26 週）</h2>
+    <p class="hint">依公告／收錄日期，週一起算；最後一週仍在進行中</p>
+    <div class="legend" id="trendLegend"></div>
+    <div class="chart" id="trend"></div>
   </section>
 
   <section class="card">
@@ -288,11 +319,12 @@ function render() {
       <select id="fSrc" aria-label="來源"><option value="">全部來源</option>${[...new Set(items.map(i => i.source))].map(s => `<option value="${esc(s)}">${esc(srcLabel(s))}</option>`).join("")}</select>
       <label class="ck"><input type="checkbox" id="fExp"> 只看已遭利用</label>
       <label class="ck"><input type="checkbox" id="fWatch"> 只看關注清單</label>
+      <select id="fSort" aria-label="排序"><option value="date">依日期排序</option><option value="epss">依 EPSS 排序</option></select>
       <input type="search" id="fQ" placeholder="搜尋標題、廠商、CVE…" aria-label="搜尋">
       <span class="count" id="fCount"></span>
     </div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>日期</th><th>來源</th><th>標題</th><th>廠商</th><th>CVE</th><th>標記</th></tr></thead>
+      <thead><tr><th>日期</th><th>來源</th><th>標題</th><th>廠商</th><th>CVE</th><th title="未來 30 天被利用的機率（FIRST EPSS）">EPSS</th><th>標記</th></tr></thead>
       <tbody id="rows"></tbody>
     </table></div>
     <button class="btn more" id="more" type="button">顯示更多</button>
@@ -307,6 +339,25 @@ function render() {
       <div class="why"><span class="badge b-exp"><span class="i" aria-hidden="true">⚠</span>已遭利用</span> ${esc(i.why)}</div></li>`).join("")
     : `<li class="empty">目前沒有符合的公告</li>`;
 
+  // Cloudflare Zero Wire briefings (needs attention first, then newest)
+  const zw = items.filter(i => i.source === "zerowire")
+    .sort((a, b) => (/needs attention/i.test(b.status) - /needs attention/i.test(a.status)) || (b.t || 0) - (a.t || 0)).slice(0, 6);
+  $("#zwList").innerHTML = zw.length ? zw.map(i => `<li>
+      <div class="d">${esc(i.date)}${(i.cves || []).length ? " · " + i.cves.slice(0, 2).map(esc).join(", ") + (i.cves.length > 2 ? " …" : "") : ""}</div>
+      <div><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
+      <div class="why">${zwBadge(i.status)} ${esc(i.action || "")}${i.exploited ? ` <span class="badge b-exp"><span class="i" aria-hidden="true">⚠</span>已遭利用</span>` : ""}</div></li>`).join("")
+    : `<li class="empty">尚無 Zero Wire 資料（下次執行後出現）</li>`;
+
+  // likely to be exploited: not yet exploited, highest EPSS, recent Taiwan notices + Zero Wire
+  const likely = items.filter(i => ["nics", "tvn", "nics_news", "zerowire"].includes(i.source) && !i.exploited &&
+      i.epss != null && i.t !== null && i.t > since(180))
+    .sort((a, b) => b.epss - a.epss).slice(0, 8);
+  $("#epssList").innerHTML = likely.length ? likely.map(i => `<li>
+      <div class="d">${esc(i.date)} · ${esc(srcLabel(i.source))}</div>
+      <div><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
+      <div class="why"><span class="epss-pill">EPSS ${fmtEpss(i.epss)}</span> ${esc(fmtPct(i.epss_pct))}${i.zw ? ` · <a href="${esc(i.zw.u)}" target="_blank" rel="noopener">Cloudflare 簡報 ↗</a>` : ""}</div></li>`).join("")
+    : `<li class="empty">尚無 EPSS 分數（每日更新；最新公布的 CVE 可能尚未評分）</li>`;
+
   // table
   let limit = 30;
   const drawRows = () => {
@@ -315,23 +366,29 @@ function render() {
     const rows = items.filter(i =>
       (!days || (i.t !== null && i.t > NOW - days * DAY)) && (!src || i.source === src) && (!exp || i.exploited) &&
       (!w || i.w.length) &&
-      (!q || `${i.title} ${i.vendor} ${(i.cves || []).join(" ")} ${i.product || ""}`.toLowerCase().includes(q)))
-      .sort((a, b) => (b.t || 0) - (a.t || 0));
+      (!q || `${i.title} ${i.vendor} ${(i.cves || []).join(" ")} ${i.product || ""} ${(i.tags || []).join(" ")} ${i.action || ""}`.toLowerCase().includes(q)))
+      .sort($("#fSort").value === "epss"
+        ? (a, b) => (b.epss ?? -1) - (a.epss ?? -1) || (b.t || 0) - (a.t || 0)
+        : (a, b) => (b.t || 0) - (a.t || 0));
     $("#fCount").textContent = `共 ${rows.length} 筆`;
     $("#rows").innerHTML = rows.slice(0, limit).map(i => {
       const tags = [];
       if (i.exploited) tags.push(`<span class="badge b-exp" title="${esc(i.why)}"><span class="i" aria-hidden="true">⚠</span>已遭利用</span>`);
       if (i.ransomware) tags.push(`<span class="badge b-ran"><span class="i" aria-hidden="true">◆</span>勒索軟體</span>`);
       if (i.w.length) tags.push(`<span class="badge b-watch" title="${esc(i.w.join(", "))}"><span class="i" aria-hidden="true">★</span>關注：${esc(i.w.slice(0, 2).join(", "))}</span>`);
+      if (i.source === "zerowire") tags.push(zwBadge(i.status));
+      if (i.zw) tags.push(`<a class="badge b-link" href="${esc(i.zw.u)}" target="_blank" rel="noopener" title="${esc(i.zw.t)}">Cloudflare 簡報 ↗</a>`);
       const cves = (i.cves || []);
+      const sub = i.due ? `CISA 修補期限 ${esc(i.due)}` : (i.source === "zerowire" && i.action ? esc(i.action) : "");
       return `<tr><td class="date">${esc(i.date)}</td><td class="src">${esc(srcLabel(i.source))}</td>
-        <td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a>${i.due ? `<div class="d" style="color:var(--text-muted);font-size:12px">CISA 修補期限 ${esc(i.due)}</div>` : ""}</td>
+        <td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a>${sub ? `<div style="color:var(--text-muted);font-size:12px">${sub}</div>` : ""}</td>
         <td>${esc(i.vendor)}</td><td class="cve">${cves.slice(0, 3).map(esc).join("<br>")}${cves.length > 3 ? `<br>+${cves.length - 3}` : ""}</td>
+        <td class="epss" title="${esc(fmtPct(i.epss_pct))}">${i.epss != null ? fmtEpss(i.epss) : `<span style="color:var(--text-muted)">—</span>`}</td>
         <td><div class="tags">${tags.join("")}</div></td></tr>`;
-    }).join("") || `<tr><td colspan="6" class="empty">沒有符合條件的項目</td></tr>`;
+    }).join("") || `<tr><td colspan="7" class="empty">沒有符合條件的項目</td></tr>`;
     $("#more").style.display = rows.length > limit ? "" : "none";
   };
-  ["#fRange", "#fSrc", "#fExp", "#fWatch"].forEach(s => $(s).addEventListener("change", () => { limit = 30; drawRows(); }));
+  ["#fRange", "#fSrc", "#fExp", "#fWatch", "#fSort"].forEach(s => $(s).addEventListener("change", () => { limit = 30; drawRows(); }));
   $("#fQ").addEventListener("input", () => { limit = 30; drawRows(); });
   $("#more").addEventListener("click", () => { limit += 100; drawRows(); });
   drawRows();
@@ -342,11 +399,13 @@ function render() {
 // ---------------------------------------------------------------- charts
 function renderCharts() { if (!DATA) return; trendChart(); vendorChart(); }
 
-function niceMax(v) {
-  if (v <= 4) return 4;
-  const p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p;
-  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
-  return Math.ceil(v / (step * p / 4)) * (step * p / 4) || 4;
+// whole-number axis: step is 1, 2 or 5 × 10^k, giving 3–5 gridlines
+function niceScale(v) {
+  v = Math.max(1, v);
+  const raw = v / 4, p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = Math.max(1, [1, 2, 5, 10].map(m => m * p).find(s => s >= raw));
+  const max = Math.ceil(v / step) * step;
+  return { max, step, ticks: Math.round(max / step) };
 }
 
 function weekStart(t) { // Monday 00:00 Taipei
@@ -371,14 +430,14 @@ function trendChart() {
   const W = Math.max(280, el.clientWidth), H = W < 520 ? 220 : 260;
   const m = { l: 32, r: W < 520 ? 12 : 72, t: 10, b: 26 };
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const ymax = niceMax(Math.max(1, ...series.flatMap(s => s.vals)));
+  const sc = niceScale(Math.max(1, ...series.flatMap(s => s.vals))), ymax = sc.max;
   const x = i => m.l + (iw * i) / (N - 1), y = v => m.t + ih - (ih * v) / ymax;
   const surface = cssVar("--surface-1"), grid = cssVar("--grid");
   let svg = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="每週新增數量折線圖">`;
-  for (let k = 0; k <= 4; k++) {
-    const v = (ymax * k) / 4, yy = y(v);
+  for (let k = 0; k <= sc.ticks; k++) {
+    const v = k * sc.step, yy = y(v);
     svg += `<line x1="${m.l}" x2="${W - m.r}" y1="${yy}" y2="${yy}" stroke="${grid}" stroke-width="1"/>`;
-    svg += `<text class="lbl" x="${m.l - 6}" y="${yy + 4}" text-anchor="end">${Number.isInteger(v) ? v : v.toFixed(1)}</text>`;
+    svg += `<text class="lbl" x="${m.l - 6}" y="${yy + 4}" text-anchor="end">${v}</text>`;
   }
   const every = W < 520 ? 6 : 4;
   weeks.forEach((t, i) => { if ((N - 1 - i) % every === 0 && i < N - 1) svg += `<text class="lbl" x="${x(i)}" y="${H - 6}" text-anchor="middle">${fmtMD(t)}</text>`; });
@@ -462,4 +521,3 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderChar
 </script>
 </body>
 </html>
-
