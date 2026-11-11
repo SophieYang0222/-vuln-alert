@@ -8,6 +8,7 @@ Every 30 minutes a GitHub Action checks the sources below, keeps a running histo
 | **NICS 漏洞警示新聞** | NICS vendor advisories and weekly KEV digests |
 | **TWCERT/CC TVN** | CVEs in Taiwanese products (ASUS, D-Link, Zyxel, local enterprise software…) |
 | **CISA KEV** | Vulnerabilities confirmed as exploited in the wild, the "patch now" list |
+| **Cloudflare Zero Wire** | Plain-language briefings on critical internet-facing vulnerabilities: what happened and what to do now. "Needs attention" briefings count as 🔴 |
 | TWCERT/CC 資安新聞 | General security news (off by default; enable with `SOURCES=…,twcert_news`) |
 
 ## What the dashboard shows
@@ -16,6 +17,8 @@ Every 30 minutes a GitHub Action checks the sources below, keeps a running histo
 - **Weekly trend** over 26 weeks for NICS, KEV and TVN. Hover to see a week's numbers. The current week is drawn dashed because it isn't over yet.
 - **Most-exploited vendors** in the last 180 days, from KEV.
 - **Taiwan-flagged and exploited**: NICS/TVN announcements whose CVE is already in CISA KEV, or that say the vulnerability is already being exploited.
+- **Cloudflare Zero Wire briefings**: the latest briefings, "Needs attention" first, each with its recommended action. Any NICS, TVN or KEV item about the same CVE gets a **Cloudflare 簡報 ↗** link to the briefing.
+- **Likely to be exploited (EPSS)**: recent Taiwan notices and Zero Wire briefings that are *not yet* exploited, ranked by their EPSS score, the FIRST.org estimate of the chance of exploitation in the next 30 days. The full list has an EPSS column and can be sorted by it.
 - **Full list** with filters for time range, source, exploited only and watchlist only, plus search by title, vendor or CVE.
 - **Source health**: a red chip appears when a source failed on the last run.
 
@@ -87,12 +90,18 @@ On Windows, run `set PYTHONUTF8=1` first. Opening `docs/index.html` directly as 
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `SOURCES` | `nics,nics_news,tvn,kev` | sources to check |
+| `SOURCES` | `nics,nics_news,tvn,kev,zerowire` | sources to check |
 | `LINE_MIN_PRIORITY` | `3` | LINE: `1` only 🔴 exploited, `2` also 🟠 watchlist, `3` all new items |
 | `MODE_TVN`, `MODE_KEV`, `MODE_NICS`, `MODE_NICS_NEWS`, `MODE_TWCERT_NEWS` | `all` (`watchlist` for news) | LINE: `watchlist` = only push items matching your watchlist or marked 🔴 |
 | `WATCHLIST` (secret) | — | your comma-separated keywords for LINE 🟠 alerts; combined with `watchlist.txt` |
 | `PUBLISH_WATCHLIST` | `false` | `true` = show the shared watchlist on the dashboard (only for a private dashboard) |
+| `EPSS` | `on` | `off` = don't look up EPSS scores |
+| `MODE_ZEROWIRE` | `all` | LINE: `watchlist` = only push Zero Wire briefings matching your watchlist or marked "Needs attention" |
 | `NICS_RSS_URL` | `https://www.nics.nat.gov.tw/RSS2.xml` | NICS feed; `off` = read the page with the headless browser |
 | `FAIL_ALERT_AFTER` | 3 | consecutive failures before a LINE warning |
 
 `python vuln_alert.py --dry-run` fetches and prints without writing anything. `--discover` shows what the NICS pages load, which helps if their layout changes. `--test-line` sends a test LINE message.
+
+### About EPSS
+
+EPSS scores come from the free FIRST.org API. All tracked CVEs are looked up once a day (Taipei time) and cached in `docs/epss.json`; runs later that day only look up newly seen CVEs. Brand-new CVEs often have no score for a day or two. If the API is unavailable, the dashboard keeps the previous scores and shows a red **FIRST EPSS** marker. EPSS is a probability estimate, not evidence of exploitation.

@@ -36,7 +36,7 @@ import requests
 TPE = timezone(timedelta(hours=8))
 STATE_FILE = Path(os.getenv("STATE_FILE", "state/seen.json"))
 WATCHLIST_FILE = Path(os.getenv("WATCHLIST_FILE", "watchlist.txt"))
-SOURCES = [s.strip() for s in os.getenv("SOURCES", "nics,nics_news,tvn,kev").split(",") if s.strip()]
+SOURCES = [s.strip() for s in (os.getenv("SOURCES") or "nics,nics_news,tvn,kev,zerowire").split(",") if s.strip()]
 # "all" = notify every new item; "watchlist" = only items matching watchlist (or critical)
 SOURCE_MODE = {
     "nics": os.getenv("MODE_NICS", "all"),
@@ -44,7 +44,12 @@ SOURCE_MODE = {
     "tvn": os.getenv("MODE_TVN", "all"),
     "kev": os.getenv("MODE_KEV", "all"),
     "twcert_news": os.getenv("MODE_TWCERT_NEWS", "watchlist"),
+    "zerowire": os.getenv("MODE_ZEROWIRE", "all"),
 }
+# EPSS (FIRST.org): probability a CVE is exploited in the next 30 days. Cached, refreshed once a day.
+EPSS_ENABLED = os.getenv("EPSS", "on").strip().lower() not in ("0", "off", "false", "no")
+EPSS_URL = "https://api.first.org/data/v1/epss"
+EPSS_FILE = Path(os.getenv("EPSS_FILE", "docs/epss.json"))
 DATA_FILE = Path(os.getenv("DATA_FILE", "docs/data.json"))      # dashboard history (committed)
 # Publish which items match the watchlist? Keep "false" for a public dashboard: the matches would reveal
 # which vendors/products you run. Set "true" only if the dashboard is private (GitHub Enterprise Cloud).
@@ -70,6 +75,7 @@ URLS = {
     "tvn": "https://www.twcert.org.tw/tw/rss-132-1.xml",
     "twcert_news": "https://www.twcert.org.tw/tw/rss-104-1.xml",
     "kev": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "zerowire": "https://radar.cloudflare.com/security/zero-wire/rss",
 }
 # NICS's official RSS for 漏洞警訊公告 (from https://www.nics.nat.gov.tw/rss_service/).
 # Used first; the headless-browser scrape is only a fallback if the feed fails. Set NICS_RSS_URL=off to disable.
@@ -81,6 +87,7 @@ LABELS = {
     "tvn": "TWCERT/CC 台灣漏洞(TVN)",
     "kev": "CISA KEV 已遭利用漏洞",
     "twcert_news": "TWCERT/CC 資安新聞",
+    "zerowire": "Cloudflare Zero Wire",
 }
 
 HOT = re.compile(r"已遭.{0,6}利用|遭駭客利用|在野|零時差|0-?day|actively exploited|in the wild|勒索", re.I)
@@ -106,6 +113,9 @@ class Item:
     product: str = ""
     due: str = ""
     ransomware: bool = False
+    status: str = ""           # Zero Wire: "Needs attention" / "Reference"
+    action: str = ""           # Zero Wire: recommended action, e.g. "Prioritize patching."
+    tags: list[str] = field(default_factory=list)
 
 
 def norm_date(text: str) -> str:
@@ -176,6 +186,44 @@ def fetch_kev() -> list[Item]:
     items = parse_kev(http_get(URLS["kev"], timeout=60).json())
     if not items:
         raise RuntimeError("KEV feed empty")
+    return items
+
+
+ZW_STATUSES = ("needs attention", "reference")
+SENTENCE_END = re.compile(r"(?<=[.!?。！？])\s")
+
+
+def parse_zerowire(content: bytes) -> list[Item]:
+    """Cloudflare Radar Zero Wire RSS. Status + CVEs + tags arrive as <category>; the description opens with
+    the recommended action. The guid embeds the update date (slug@YYYY-MM-DD), so track briefings by link."""
+    feed = feedparser.parse(content)
+    items = []
+    for e in feed.entries:
+        title = (e.get("title") or "").strip()
+        link = (e.get("link") or "").strip()
+        if not title or not link:
+            continue
+        cats = [(t.get("term") or "").strip() for t in e.get("tags", []) if (t.get("term") or "").strip()]
+        status = next((c for c in cats if c.lower() in ZW_STATUSES), "")
+        cves = sorted({c.upper() for c in cats if CVE_RE.fullmatch(c)} |
+                      {c.upper() for c in CVE_RE.findall(title)})
+        tags = [c for c in cats if c != status and not CVE_RE.fullmatch(c)]
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", e.get("summary", "") or "")).strip()
+        action = SENTENCE_END.split(text, 1)[0][:120] if text else ""
+        date = ""
+        for key in ("published_parsed", "updated_parsed"):
+            if e.get(key):
+                date = datetime(*e[key][:6]).strftime("%Y-%m-%d")
+                break
+        items.append(Item("zerowire", link.rstrip("/"), title, link, date,
+                          extra=" ".join([action] + cves), status=status, action=action, tags=tags[:6]))
+    return items
+
+
+def fetch_zerowire() -> list[Item]:
+    items = parse_zerowire(http_get(URLS["zerowire"]).content)
+    if not items:
+        raise RuntimeError("Zero Wire RSS returned 0 items")
     return items
 
 
@@ -304,6 +352,8 @@ def fetch(source: str) -> list[Item]:
         return fetch_nics(source)
     if source == "kev":
         return fetch_kev()
+    if source == "zerowire":
+        return fetch_zerowire()
     if source in ("tvn", "twcert_news"):
         return fetch_rss(URLS[source], source)
     raise ValueError(f"unknown source {source}")
@@ -323,9 +373,10 @@ def load_watchlist() -> list[str]:
 
 
 def classify(item: Item, watch: list[str]) -> Item:
-    hay = f"{item.title} {item.extra}".lower()
+    hay = f"{item.title} {item.extra} {' '.join(item.tags)}".lower()
     item.matches = [w for w in watch if w.lower() in hay]
-    if item.source == "kev" or HOT.search(f"{item.title} {item.extra}"):
+    zw_urgent = item.source == "zerowire" and item.status.lower() == "needs attention"
+    if item.source == "kev" or zw_urgent or HOT.search(f"{item.title} {item.extra}"):
         item.priority = 1
     elif item.matches:
         item.priority = 2
@@ -391,6 +442,8 @@ def canonical_vendor(raw: str) -> str:
 def guess_vendor(it: Item) -> str:
     if it.vendor:
         return canonical_vendor(it.vendor)
+    if it.source == "zerowire":  # briefing titles are nicknames ("php2shell"); the first tag is the technology
+        return canonical_vendor(it.tags[0]) if it.tags else ""
     t = it.title.strip()
     if it.source in ("tvn",):
         head = re.split(r"[｜|]", t, 1)[0] if re.search(r"[｜|]", t) else t.split(" - ")[0]
@@ -404,6 +457,73 @@ def guess_vendor(it: Item) -> str:
     if m:
         return canonical_vendor(m.group(0))
     return head[:8]
+
+
+def _epss_batches(cves: list[str], max_chars: int = 1900) -> list[list[str]]:
+    """The FIRST API caps the cve= parameter at 2000 characters (commas included)."""
+    batches, cur, size = [], [], 0
+    for c in cves:
+        if cur and size + len(c) + 1 > max_chars:
+            batches.append(cur)
+            cur, size = [], 0
+        cur.append(c)
+        size += len(c) + 1
+    if cur:
+        batches.append(cur)
+    return batches
+
+
+def fetch_epss(cves: list[str]) -> dict[str, list[float]]:
+    out: dict[str, list[float]] = {}
+    for batch in _epss_batches(cves):
+        r = requests.get(EPSS_URL, params={"cve": ",".join(batch), "limit": len(batch) + 10},
+                         headers={"User-Agent": UA}, timeout=30)
+        r.raise_for_status()
+        for d in r.json().get("data", []):
+            try:
+                out[d["cve"].upper()] = [round(float(d["epss"]), 4), round(float(d["percentile"]), 3)]
+            except (KeyError, TypeError, ValueError):
+                continue
+    return out
+
+
+def refresh_epss(cves: set[str]) -> tuple[dict[str, list[float]], dict]:
+    """Return {cve: [epss, percentile]} from docs/epss.json, refreshing all scores once per (Taipei) day and
+    looking up CVEs that are new since the last refresh. Failures keep the previous scores."""
+    today = datetime.now(TPE).strftime("%Y-%m-%d")
+    cache = {"date": "", "scores": {}, "none": []}
+    if EPSS_FILE.exists():
+        try:
+            cache.update(json.loads(EPSS_FILE.read_text(encoding="utf-8")))
+        except json.JSONDecodeError:
+            log.warning("epss cache unreadable, refetching")
+    scores: dict[str, list[float]] = cache.get("scores", {})
+    status = {"enabled": EPSS_ENABLED, "ok": True, "date": cache.get("date", ""), "error": ""}
+    if not EPSS_ENABLED or not cves:
+        status["count"] = len(scores)
+        return scores, status
+
+    full = cache.get("date") != today
+    unscored_today = set(cache.get("none", [])) if not full else set()
+    want = sorted(cves) if full else sorted(c for c in cves if c not in scores and c not in unscored_today)
+    if want:
+        try:
+            got = fetch_epss(want)
+            if full:
+                scores = {c: v for c, v in scores.items() if c in cves}  # drop CVEs no longer tracked
+            scores.update(got)
+            none = sorted(unscored_today | {c for c in want if c not in got})  # e.g. too new to be scored
+            new_date = today if full else cache.get("date", today)
+            EPSS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            EPSS_FILE.write_text(json.dumps({"date": new_date, "scores": scores, "none": none},
+                                            sort_keys=True, separators=(",", ":")), encoding="utf-8")
+            status["date"] = new_date
+            log.info("EPSS: looked up %d CVEs, %d scored%s", len(want), len(got), " (daily refresh)" if full else "")
+        except Exception as e:
+            status.update(ok=False, error=str(e)[:200])
+            log.error("EPSS lookup failed, keeping previous scores: %s", e)
+    status["count"] = len(scores)
+    return scores, status
 
 
 def update_dashboard(fetched: dict[str, list[Item]], watch: list[str], errors: dict[str, int],
@@ -426,11 +546,32 @@ def update_dashboard(fetched: dict[str, list[Item]], watch: list[str], errors: d
                         "date": it.date or rec.get("date") or rec["first_seen"], "cves": cves,
                         "vendor": guess_vendor(it), "product": it.product, "due": it.due,
                         "ransomware": it.ransomware})
+            if src == "zerowire":
+                rec.update({"status": it.status, "action": it.action, "tags": it.tags})
             store[key] = rec
 
     kev_cves = {r["id"].upper() for r in store.values() if r["source"] == "kev"}
+    # CVE -> newest Zero Wire briefing, to link plain-language briefings from NICS/TVN/KEV items
+    zw_by_cve: dict[str, dict] = {}
+    for r in sorted((r for r in store.values() if r["source"] == "zerowire"), key=lambda r: r["date"]):
+        for c in r.get("cves", []):
+            zw_by_cve[c] = {"t": r["title"], "u": r["link"], "s": r.get("status", "")}
+    epss, epss_status = refresh_epss({c for r in store.values() for c in r.get("cves", [])})
+
     for rec in store.values():
-        text = f"{rec['title']} {rec.get('vendor','')} {rec.get('product','')}"
+        text = f"{rec['title']} {rec.get('vendor','')} {rec.get('product','')} {' '.join(rec.get('tags', []))}"
+        zw = next((zw_by_cve[c] for c in rec.get("cves", []) if c in zw_by_cve), None)
+        if zw and rec["source"] != "zerowire":
+            rec["zw"] = zw
+        else:
+            rec.pop("zw", None)
+        scored = [epss[c] for c in rec.get("cves", []) if c in epss]
+        if scored:
+            best = max(scored)
+            rec["epss"], rec["epss_pct"] = best[0], best[1]
+        else:
+            rec.pop("epss", None)
+            rec.pop("epss_pct", None)
         if PUBLISH_WATCHLIST:
             rec["watch"] = [w for w in watch if w.lower() in text.lower()]
         else:
@@ -440,7 +581,7 @@ def update_dashboard(fetched: dict[str, list[Item]], watch: list[str], errors: d
             rec["exploited"], rec["why"] = True, "CISA KEV"
         elif in_kev:
             rec["exploited"], rec["why"] = True, "列於 CISA KEV: " + ", ".join(in_kev)
-        elif HOT.search(rec["title"]):
+        elif HOT.search(f"{rec['title']} {rec.get('action', '')}"):
             rec["exploited"], rec["why"] = True, "公告指出已遭利用"
         else:
             rec["exploited"], rec["why"] = False, ""
@@ -454,7 +595,8 @@ def update_dashboard(fetched: dict[str, list[Item]], watch: list[str], errors: d
               "sources": [{"key": s, "label": LABELS.get(s, s), "url": URLS.get(s, ""),
                            "ok": s in fetched, "fail_count": errors.get(s, 0),
                            "error": error_msgs.get(s, ""),
-                           "count": sum(1 for r in items if r["source"] == s)} for s in SOURCES]}
+                           "count": sum(1 for r in items if r["source"] == s)} for s in SOURCES],
+              "epss": epss_status}
     STATUS_FILE.write_text(json.dumps(status, ensure_ascii=False, indent=1), encoding="utf-8")
     log.info("dashboard data: %d items -> %s", len(items), DATA_FILE)
 
@@ -465,7 +607,11 @@ ICON = {1: "🔴", 2: "🟠", 3: "🔵"}
 
 def format_item(it: Item) -> str:
     line = f"{ICON[it.priority]} {it.title}"
-    meta = " | ".join(x for x in (it.date, it.extra if it.source == "kev" else "") if x)
+    detail = it.extra if it.source == "kev" else ""
+    if it.source == "zerowire":
+        cves = ", ".join(CVE_RE.findall(it.extra)[:3])
+        detail = " | ".join(x for x in (it.status, it.action, cves) if x)
+    meta = " | ".join(x for x in (it.date, detail) if x)
     if it.matches:
         meta = (meta + " | " if meta else "") + "命中: " + ", ".join(it.matches)
     out = line + (f"\n   {meta}" if meta else "")
