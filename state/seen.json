@@ -2207,7 +2207,15 @@
    "https://radar.cloudflare.com/security/zero-wire/php2shell": "2026-11-11T12:20:20+08:00",
    "https://radar.cloudflare.com/security/zero-wire/rsc-typed-array-rce": "2026-11-11T12:20:20+08:00",
    "https://radar.cloudflare.com/security/zero-wire/sshole": "2026-11-11T12:20:20+08:00",
-   "https://radar.cloudflare.com/security/zero-wire/wordpress-sql-injection-rce": "2026-11-11T12:20:20+08:00"
+   "https://radar.cloudflare.com/security/zero-wire/wordpress-sql-injection-rce": "2026-11-11T12:20:20+08:00",
+   "https://radar.cloudflare.com/zero-wire/citrix-netscaler-command-execution": "2026-11-13T02:23:34+08:00",
+   "https://radar.cloudflare.com/zero-wire/emudhra-certificate-compromise": "2026-11-13T02:23:34+08:00",
+   "https://radar.cloudflare.com/zero-wire/linux-ipv4-tcp-use-after-free": "2026-11-13T02:23:34+08:00",
+   "https://radar.cloudflare.com/zero-wire/node2shell": "2026-11-13T02:23:34+08:00",
+   "https://radar.cloudflare.com/zero-wire/php2shell": "2026-11-13T02:23:34+08:00",
+   "https://radar.cloudflare.com/zero-wire/rsc-typed-array-rce": "2026-11-13T02:23:34+08:00",
+   "https://radar.cloudflare.com/zero-wire/sshole": "2026-11-13T02:23:34+08:00",
+   "https://radar.cloudflare.com/zero-wire/wordpress-sql-injection-rce": "2026-11-13T02:23:34+08:00"
   }
  }
 }
