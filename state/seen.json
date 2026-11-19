@@ -2236,10 +2236,12 @@
    "https://radar.cloudflare.com/zero-wire/linux-ipv4-tcp-use-after-free": "2026-11-13T02:23:34+08:00",
    "https://radar.cloudflare.com/zero-wire/nginx2root": "2026-11-19T01:04:17+08:00",
    "https://radar.cloudflare.com/zero-wire/node2shell": "2026-11-13T02:23:34+08:00",
+   "https://radar.cloudflare.com/zero-wire/php-november-2026-security-release-phpaftershell": "2026-11-20T01:32:48+08:00",
    "https://radar.cloudflare.com/zero-wire/php2shell": "2026-11-13T02:23:34+08:00",
    "https://radar.cloudflare.com/zero-wire/rsc-typed-array-rce": "2026-11-13T02:23:34+08:00",
    "https://radar.cloudflare.com/zero-wire/ruby2shell": "2026-11-19T18:06:57+08:00",
    "https://radar.cloudflare.com/zero-wire/sshole": "2026-11-13T02:23:34+08:00",
+   "https://radar.cloudflare.com/zero-wire/wordpress-7-1-5-template-part-privilege-escalation": "2026-11-20T01:32:48+08:00",
    "https://radar.cloudflare.com/zero-wire/wordpress-sql-injection-rce": "2026-11-13T02:23:34+08:00"
   }
  }
