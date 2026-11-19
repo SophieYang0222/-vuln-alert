@@ -2238,6 +2238,7 @@
    "https://radar.cloudflare.com/zero-wire/node2shell": "2026-11-13T02:23:34+08:00",
    "https://radar.cloudflare.com/zero-wire/php2shell": "2026-11-13T02:23:34+08:00",
    "https://radar.cloudflare.com/zero-wire/rsc-typed-array-rce": "2026-11-13T02:23:34+08:00",
+   "https://radar.cloudflare.com/zero-wire/ruby2shell": "2026-11-19T18:06:57+08:00",
    "https://radar.cloudflare.com/zero-wire/sshole": "2026-11-13T02:23:34+08:00",
    "https://radar.cloudflare.com/zero-wire/wordpress-sql-injection-rce": "2026-11-13T02:23:34+08:00"
   }
